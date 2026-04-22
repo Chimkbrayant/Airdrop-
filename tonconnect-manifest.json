@@ -1,0 +1,84 @@
+// ==========================================
+// TON CONNECT - FIXED RETURN TO TELEGRAM
+// ==========================================
+function initTonConnect() {
+    try {
+        // Check if TON Connect UI is loaded
+        if (typeof window.TON_CONNECT_UI === 'undefined') {
+            console.log('Waiting for TON Connect UI to load...');
+            setTimeout(initTonConnect, 1000);
+            return;
+        }
+
+        const container = document.getElementById('ton-connect');
+        if (!container) return;
+
+        container.innerHTML = '';
+
+        // IMPORTANT: Configure return URL for Telegram Mini App
+        // This ensures users come back after wallet connection
+        const returnUrl = 'https://t.me/Goldhunt101bot?startapp=main';
+        
+        tonConnectUI = new window.TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: `${API_BASE}/tonconnect-manifest.json`,
+            buttonRootId: 'ton-connect',
+            // CRITICAL: This tells TON Connect where to return after wallet action
+            actionsConfiguration: {
+                twaReturnUrl: returnUrl
+            }
+        });
+
+        // Additional UI options for Telegram environment
+        tonConnectUI.uiOptions = {
+            language: 'en',
+            uiPreferences: {
+                theme: 'DARK'
+            }
+        };
+
+        // Handle wallet connection status changes
+        tonConnectUI.onStatusChange(async (wallet) => {
+            if (wallet) {
+                gameState.walletAddress = wallet.account.address;
+                gameState.walletConnected = true;
+                localStorage.setItem('goldhunt_walletAddress', wallet.account.address);
+                localStorage.setItem('goldhunt_walletConnected', 'true');
+                showToast('✅ Wallet Connected!');
+                updateProfilePage();
+
+                // Sync with backend
+                try {
+                    await fetch(`${API_BASE}/api/wallet/connect`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            telegramId: gameState.telegramUserId,
+                            walletAddress: wallet.account.address
+                        })
+                    });
+                } catch (error) {
+                    console.error('Wallet sync error:', error);
+                }
+            } else {
+                gameState.walletAddress = null;
+                gameState.walletConnected = false;
+                localStorage.removeItem('goldhunt_walletAddress');
+                localStorage.removeItem('goldhunt_walletConnected');
+                showToast('🔌 Wallet Disconnected');
+                updateProfilePage();
+            }
+        });
+
+        // Hide fallback button since TON Connect loaded successfully
+        const fallback = document.getElementById('walletFallback');
+        if (fallback) fallback.style.display = 'none';
+
+        console.log('✅ TON Connect initialized with return URL:', returnUrl);
+
+    } catch (error) {
+        console.error('TON Connect error:', error);
+        const fallback = document.getElementById('walletFallback');
+        if (fallback) fallback.style.display = 'block';
+        setTimeout(initTonConnect, 3000);
+    }
+}
